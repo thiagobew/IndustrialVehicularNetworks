@@ -21,13 +21,13 @@
 #define DEFAULT_IF	"eth0"
 #define BUF_SIZ		1514
 
-#define VALID 0
 #define CORRUPT_W_ARP 1
 #define ADD_ARP_N_IP 2
 #define ADD_IP 		3
 #define ADD_N_CORRUPT_IP 4
 #define ADD_ARP 5
 #define SMALLER_PKT 6
+#define SET_AS_IP 7
 
 void writePayload(char *sendbuf, int *tx_len, char* payload, int payload_len) {
 	for (int i = 0; i < 10 * payload_len; i++) {
@@ -54,6 +54,11 @@ void createEthernetHeader(char *sendbuf, int* tx_len, char* src, char* dest) {
 void setAsARP(char *sendbuf) {
 	struct ether_header *eh = (struct ether_header *) sendbuf;
 	eh->ether_type = htons(0x0806);
+}
+
+void setAsIP(char *sendbuf) {
+	struct ether_header *eh = (struct ether_header *) sendbuf;
+	eh->ether_type = htons(0x0800);
 }
 
 void createARPHeader(char *sendbuf, int *tx_len, char* src, char* dest) {
@@ -92,16 +97,6 @@ void createIPHeader(char *sendbuf, int *tx_len, char* src, char* dest) {
 	*tx_len += sizeof(struct iphdr);
 }
 
-void corruptIPHeaderTTL(char *sendbuf) {
-	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
-	iph->ttl = 256;
-}
-
-void corruptIPHeaderChecksum(char *sendbuf) {
-	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
-	iph->check = htons(0x1234);
-}
-
 void corruptIPHeaderLength(char *sendbuf) {
 	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
 	iph->tot_len = htons(0x1234);
@@ -138,13 +133,11 @@ int main(int argc, char *argv[])
 	if (ioctl(sockfd, SIOCGIFHWADDR, &if_mac) < 0)
 	    perror("SIOCGIFHWADDR");
 
-	
+	int option = argv[1] ? atoi(argv[1]) : 0;
+
 	createEthernetHeader(sendbuf, &tx_len, if_mac.ifr_hwaddr.sa_data, MAC_addr);
 
-	int option = argv[1] ? atoi(argv[1]) : 0;
 	switch (option) {
-		case VALID:
-			break;
 		case CORRUPT_W_ARP:
 			setAsARP(sendbuf);
 			break;
@@ -157,10 +150,13 @@ int main(int argc, char *argv[])
 			break;
 		case ADD_N_CORRUPT_IP:
 			createIPHeader(sendbuf, &tx_len, "0.0.0.0", "231.0.0.1");
-			corruptIPHeaderTTL(sendbuf);
+			corruptIPHeaderLength(sendbuf);
 			break;
 		case ADD_ARP:
 			createARPHeader(sendbuf, &tx_len, if_mac.ifr_hwaddr.sa_data, MAC_addr);
+			break;
+		case SET_AS_IP:
+			setAsIP(sendbuf);
 			break;
 		default:
 			break;	

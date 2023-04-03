@@ -4,3 +4,4 @@ bzImage
 /src/busybox-1.36.0
 /initrd
 /.vscode
+*.tar.*
